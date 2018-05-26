@@ -276,7 +276,7 @@ getDbConstraints conn =
 
      columnChecks <-
        fmap mconcat . forM tbls $ \(oid, tbl) ->
-       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, pg_catalog.format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute att WHERE att.attrelid=? AND att.attnum>0 AND att.attisdropped='f'"
+       do columns <- Pg.query conn "SELECT attname, atttypid, atttypmod, attnotnull, pg_catalog.format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute att WHERE att.attrelid=? AND att.attnum>0"
                        (Pg.Only (oid :: Pg.Oid))
           let columnChecks = map (\(nm, typId :: Pg.Oid, typmod, _, typ :: ByteString) ->
                                     let typmod' = if typmod == -1 then Nothing else Just (typmod - 4)
@@ -300,7 +300,10 @@ getDbConstraints conn =
                                            , "JOIN pg_class c ON c.oid=i.indrelid"
                                            , "WHERE c.relkind='r' AND i.indisprimary GROUP BY relname, i.indrelid" ]))
 
-     pure (tblsExist ++ columnChecks ++ primaryKeys)
+     exts <- Pg.query_ conn "SELECT extname FROM pg_extension"
+     let extsExist = Db.SomeDatabasePredicate . PgHasExtension . Pg.fromOnly <$> exts
+
+     pure (tblsExist ++ columnChecks ++ primaryKeys ++ extsExist)
 
 -- * Postgres-specific data types
 
